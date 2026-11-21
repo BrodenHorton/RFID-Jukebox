@@ -1,60 +1,101 @@
 #include "Song.h"
 #include <SPI.h>
 #include <MFRC522.h>
+#include "DFRobotDFPlayerMini.h"
+#include <SoftwareSerial.h>
 
 #define SS_PIN 10
 #define RST_PIN 7
 
+#define FPSerial softSerial
+
+int MAX_MISSED_READS = 3;
+
 MFRC522 rfid(SS_PIN, RST_PIN);
+
+SoftwareSerial softSerial(4, 5); // Parameters are (arduino_rx, arduino_tx)
+DFRobotDFPlayerMini myDFPlayer;
  
 // Specify the block number you want to read
 byte targetBlock = 1; 
 
+bool isCardPresent = false;
+int missedReadsCounter = 0;
+
 Song songs[3] = {
-  {"cat", "song_1"},
-  {"creator", "song_2"},
-  {"ocean_man", "iconic_song"}
+  {"cat", 1},
+  {"creator", 2},
+  {"ocean_man", 3}
 };
 
 void setup() {
+  FPSerial.begin(9600);
   Serial.begin(9600);
   SPI.begin();
+
   rfid.PCD_Init();
   Serial.println(F("Scan your MIFARE card..."));
+
+  initDFPlayerMini();
+}
+
+void initDFPlayerMini() {
+  Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
+  if (!myDFPlayer.begin(FPSerial, /*isACK = */true, /*doReset = */false)) {  //Use serial to communicate with mp3.
+    Serial.println(F("Unable to begin:"));
+    Serial.println(F("1.Please recheck the connection!"));
+    Serial.println(F("2.Please insert the SD card!"));
+    while(true){
+      delay(0); // Code to compatible with ESP8266 watch dog.
+    }
+  }
+  Serial.println(F("DFPlayer Mini online."));
+  
+  myDFPlayer.volume(24);
 }
 
 void loop() {
-  // Look for new cards
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
-    return;
+  bool isCardDetected = (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) || tryWakingCard();
+
+  if(!isCardPresent) {
+    if(isCardDetected) {
+      isCardPresent = true;
+
+      Serial.println(F("Card detected."));
+
+      if(!isAuthenticated())
+        return;
+
+      // Read data from the block
+      byte buffer[18];
+      byte size = sizeof(buffer);
+      MFRC522::StatusCode status = rfid.MIFARE_Read(targetBlock, buffer, &size);
+      if (status != MFRC522::STATUS_OK) {
+        Serial.print(F("MIFARE_Read() failed: "));
+        Serial.println(rfid.GetStatusCodeName(status));
+        return;
+      }
+
+      printBlockAsHex(buffer);
+
+      String songId = getBlockStringValue(buffer);
+      processSong(songId);
+      Serial.println();
+    }
+  }
+  else {
+    if(!isCardDetected) {
+      isCardPresent = false;
+      Serial.println("Card pulled away");
+      Serial.println();
+    }
   }
 
-  Serial.println(F("Card detected."));
-
-  if(!isAuthenticated())
-    return;
-
-  // Read data from the block
-  byte buffer[18];
-  byte size = sizeof(buffer);
-  MFRC522::StatusCode status = rfid.MIFARE_Read(targetBlock, buffer, &size);
-  if (status != MFRC522::STATUS_OK) {
-    Serial.print(F("MIFARE_Read() failed: "));
-    Serial.println(rfid.GetStatusCodeName(status));
-    return;
-  }
-
-  printBlockAsHex(buffer);
-
-  String songId = getBlockStringValue(buffer);
-  processSong(songId);
-  Serial.println();
-
-  // Halt PICC and stop crypto
+  //Halt PICC and stop crypto
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
   
-  delay(2000);
+  delay(500);
 }
 
 bool isAuthenticated() {
@@ -81,6 +122,17 @@ bool isAuthenticated() {
   return true;
 }
 
+bool tryWakingCard() {
+  // Buffer required by PICC_WakeupA to store the 2-byte ATQA response
+  byte bufferATQA[2];
+  byte bufferSize = sizeof(bufferATQA);
+
+  // WUPA wakes both IDLE (new) and HALT (sleeping) cards
+  MFRC522::StatusCode status = rfid.PICC_WakeupA(bufferATQA, &bufferSize);
+
+  return status == MFRC522::STATUS_OK;
+}
+
 void processSong(String songId) {
   if(!songsContains(songId)) {
     Serial.print("No song found with Id: ");
@@ -92,11 +144,11 @@ void processSong(String songId) {
   if(song == NULL)
     return;
 
-  String songFilePath = song->getSongFilePath();
+  int songFileIndex = song->getFileIndex();
   Serial.print("Song Id: ");
   Serial.println(songId);
-  Serial.print("Song File Path: ");
-  Serial.println(songFilePath);
+  Serial.print("Song File Index: ");
+  Serial.println(songFileIndex);
 }
 
 String getBlockStringValue(byte* buffer) {
@@ -112,7 +164,7 @@ String getBlockStringValue(byte* buffer) {
 bool songsContains(String songId) {
   int songslength = sizeof(songs) / sizeof(songs[0]);
   for(int i = 0; i < songslength; i++) {
-    if(songs[i].getSongId().equals(songId))
+    if(songs[i].getId().equals(songId))
       return true;
   }
 
@@ -122,7 +174,7 @@ bool songsContains(String songId) {
 Song* getSongById(String songId) {
   int songslength = sizeof(songs) / sizeof(songs[0]);
   for(int i = 0; i < songslength; i++) {
-    if(songs[i].getSongId().equals(songId))
+    if(songs[i].getId().equals(songId))
       return &songs[i];
   }
 

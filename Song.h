@@ -5,12 +5,12 @@
 
 class Song {
   public:
-    Song(String songId, String songFilePath);
-    String getSongId();
-    String getSongFilePath();
+    Song(String songId, int fileIndex);
+    String getId();
+    int getFileIndex();
 
   private:
-    String songId;
-    String songFilePath;
+    String id;
+    int fileIndex;
 };
 #endif

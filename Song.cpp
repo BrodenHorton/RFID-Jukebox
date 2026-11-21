@@ -1,14 +1,14 @@
 #include "Song.h"
 
-Song::Song(String songId, String songFilePath) {
-  this->songId = songId;
-  this->songFilePath = songFilePath;
+Song::Song(String id, int fileIndex) {
+  this->id = id;
+  this->fileIndex = fileIndex;
 }
 
-String Song::getSongId() {
-  return songId;
+String Song::getId() {
+  return id;
 }
 
-String Song::getSongFilePath() {
-  return songFilePath;
+int Song::getFileIndex() {
+  return fileIndex;
 }
