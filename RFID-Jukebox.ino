@@ -22,10 +22,21 @@ byte targetBlock = 1;
 bool isCardPresent = false;
 int missedReadsCounter = 0;
 
-Song songs[3] = {
+Song songs[14] = {
   {"cat", 1},
-  {"creator", 2},
-  {"ocean_man", 3}
+  {"chirp", 2},
+  {"far", 3},
+  {"mall", 4},
+  {"stal", 5},
+  {"strad", 6},
+  {"ward", 7},
+  {"wait", 8},
+  {"pigstep", 9},
+  {"otherside", 10},
+  {"relic", 11},
+  {"creator", 12},
+  {"lava_chicken", 13},
+  {"ocean_man", 14}
 };
 
 void setup() {
@@ -84,10 +95,15 @@ void loop() {
   }
   else {
     if(!isCardDetected) {
-      isCardPresent = false;
-      Serial.println("Card pulled away");
-      Serial.println();
-      myDFPlayer.stop();
+      missedReadsCounter++;
+
+      if(missedReadsCounter >= MAX_MISSED_READS) {
+        missedReadsCounter = 0;
+        isCardPresent = false;
+        Serial.println("Card pulled away");
+        Serial.println();
+        myDFPlayer.stop();
+      }
     }
   }
 
@@ -95,7 +111,7 @@ void loop() {
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
   
-  delay(500);
+  delay(100);
 }
 
 bool isAuthenticated() {
