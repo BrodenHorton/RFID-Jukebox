@@ -80,7 +80,6 @@ void loop() {
 
       String songId = getBlockStringValue(buffer);
       processSong(songId);
-      Serial.println();
     }
   }
   else {
@@ -88,6 +87,7 @@ void loop() {
       isCardPresent = false;
       Serial.println("Card pulled away");
       Serial.println();
+      myDFPlayer.stop();
     }
   }
 
@@ -137,18 +137,28 @@ void processSong(String songId) {
   if(!songsContains(songId)) {
     Serial.print("No song found with Id: ");
     Serial.println(songId);
+    Serial.println();
     return;
   }
 
   Song* song = getSongById(songId);
-  if(song == NULL)
+  if(song == NULL) {
+    Serial.println("Unable to find Song with id: ");
+    Serial.println(songId);
+    Serial.println();
     return;
+  }
 
   int songFileIndex = song->getFileIndex();
+  Serial.println("=== Now playing ===");
   Serial.print("Song Id: ");
   Serial.println(songId);
   Serial.print("Song File Index: ");
   Serial.println(songFileIndex);
+  Serial.println("===================");
+  Serial.println();
+
+  myDFPlayer.playMp3Folder(songFileIndex);
 }
 
 String getBlockStringValue(byte* buffer) {
